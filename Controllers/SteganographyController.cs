@@ -1,6 +1,7 @@
 ﻿using kryptografia.Algorithms;
 using kryptografia.Models;
 using Microsoft.AspNetCore.Mvc;
+using System.Diagnostics;
 
 namespace kryptografia.Controllers
 {
@@ -38,10 +39,20 @@ namespace kryptografia.Controllers
             try
             {
                 using var stream = request.Image.OpenReadStream();
+
+                var stopwatch = Stopwatch.StartNew();
+                long beforeMemory = GC.GetTotalMemory(false);
+
                 var resultImage = await _encoder.EmbedMessageAsync(stream, request.Message);
 
+                stopwatch.Stop();
+                long afterMemory = GC.GetTotalMemory(false);
+
                 _logger.LogInformation("Message successfully embedded in image.");
-                return File(resultImage, "image/png", "steganography.png");
+                var file = File(resultImage, "image/png", "steganography.png");
+                Response.Headers.Add("Czas", $"{stopwatch.ElapsedMilliseconds}");
+                Response.Headers.Add("Ram", $"{afterMemory - beforeMemory}");
+                return file;
             }
             catch (Exception ex)
             {
@@ -64,14 +75,89 @@ namespace kryptografia.Controllers
             try
             {
                 using var stream = request.Image.OpenReadStream();
+
+                var stopwatch = Stopwatch.StartNew();
+                long beforeMemory = GC.GetTotalMemory(false);
+
                 var message = await _decoder.ExtractMessageAsync(stream);
 
+                stopwatch.Stop();
+                long afterMemory = GC.GetTotalMemory(false);
+
                 _logger.LogInformation("Message successfully extracted from image.");
-                return Ok(new { message });
+                return Ok(new EncryptionResponse {
+                    CipherText = message, Metrics = new EncryptionMetrics {
+                    ElapsedMilliseconds = stopwatch.ElapsedMilliseconds,
+                    MemoryUsedBytes = afterMemory - beforeMemory
+                } });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error while extracting message from image.");
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        [HttpPost("embed-image")]
+        public async Task<IActionResult> EmbedImage([FromForm] SteganographyImageEmbedRequest request)
+        {
+            if (request.HostImage == null || request.HiddenImage == null)
+                return BadRequest("Both images are required.");
+
+            using var host = request.HostImage.OpenReadStream();
+            using var hidden = request.HiddenImage.OpenReadStream();
+
+            var stopwatch = Stopwatch.StartNew();
+            long beforeMemory = GC.GetTotalMemory(false);
+
+            if (request.HiddenImage.Length > request.HostImage.Length)
+                return BadRequest("Hidden image must not be larger than host image.");
+
+            try
+            {
+                var resultImage = await _encoder.EmbedImageAsync(host, hidden);
+
+                stopwatch.Stop();
+                long afterMemory = GC.GetTotalMemory(false);
+
+                var file = File(resultImage, "image/png", "hidden-image.png");
+
+                Response.Headers.Add("Czas", $"{stopwatch.ElapsedMilliseconds}");
+                Response.Headers.Add("Ram", $"{afterMemory - beforeMemory}");
+
+                return  file;
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        [HttpPost("extract-image")]
+        public async Task<IActionResult> ExtractImage([FromForm] SteganographyImageExtractRequest request)
+        {
+            if (request.Image == null)
+                return BadRequest("Image is required.");
+
+            var stopwatch = Stopwatch.StartNew();
+            long beforeMemory = GC.GetTotalMemory(false);
+
+            using var stream = request.Image.OpenReadStream();
+
+            try
+            {
+                var result = await _decoder.ExtractImageAsync(stream);
+
+                stopwatch.Stop();
+                long afterMemory = GC.GetTotalMemory(false);
+
+                Response.Headers.Add("Czas", $"{stopwatch.ElapsedMilliseconds}");
+                Response.Headers.Add("Ram", $"{afterMemory - beforeMemory}");
+
+                return File(result, "image/png", "recovered.png");
+            }
+            catch (Exception ex)
+            {
                 return BadRequest(new { error = ex.Message });
             }
         }

@@ -3,6 +3,7 @@ using kryptografia.Services;
 using kryptografia.Utils;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using System.Diagnostics;
 
 namespace kryptografia.Controllers
 {
@@ -34,9 +35,21 @@ namespace kryptografia.Controllers
 
             try
             {
+                //Pomiar Start.
+                var stopwatch = Stopwatch.StartNew();
+                long beforeMemory = GC.GetTotalMemory(false);
+
                 var result = await _service.EncryptAsync(request.PlainText, request.Algorithm, request.Key);
+
+                //Pomiar Stop.
+                stopwatch.Stop();
+                long afterMemory = GC.GetTotalMemory(false);
+
                 _logger.LogInformation("Encryption successful for algorithm {Algorithm}", request.Algorithm);
-                return Ok(new EncryptionResponse { CipherText = result });
+                return Ok(new EncryptionResponse { CipherText = result , Metrics = new EncryptionMetrics { 
+                    ElapsedMilliseconds = stopwatch.ElapsedMilliseconds,
+                    MemoryUsedBytes = afterMemory - beforeMemory    
+                } });
             }
             catch (Exception ex)
             {
@@ -58,9 +71,19 @@ namespace kryptografia.Controllers
 
             try
             {
+                var stopwatch = Stopwatch.StartNew();
+                long beforeMemory = GC.GetTotalMemory(false);
+
                 var result = await _service.DecryptAsync(request.PlainText, request.Algorithm, request.Key);
+
+                stopwatch.Stop();
+                long afterMemory = GC.GetTotalMemory(false);
+
                 _logger.LogInformation("Decryption successful for algorithm {Algorithm}", request.Algorithm);
-                return Ok(new EncryptionResponse { CipherText = result });
+                return Ok(new EncryptionResponse { CipherText = result , Metrics = new EncryptionMetrics{
+                    ElapsedMilliseconds = stopwatch.ElapsedMilliseconds,
+                    MemoryUsedBytes = afterMemory - beforeMemory
+                }});
             }
             catch (Exception ex)
             {
