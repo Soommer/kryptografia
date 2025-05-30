@@ -33,7 +33,7 @@ namespace kryptografia.Controllers
             if (request.Image == null || string.IsNullOrEmpty(request.Message))
             {
                 _logger.LogWarning("Invalid embed request: missing image or message.");
-                return BadRequest("Image and message are required.");
+                return BadRequest(new { error = "Image and message are required." });
             }
 
             try
@@ -69,7 +69,7 @@ namespace kryptografia.Controllers
             if (request.Image == null)
             {
                 _logger.LogWarning("Invalid extract request: image is missing.");
-                return BadRequest("Image is required.");
+                return BadRequest((new { error = "Image is required." }));
             }
 
             try
@@ -102,7 +102,7 @@ namespace kryptografia.Controllers
         public async Task<IActionResult> EmbedImage([FromForm] SteganographyImageEmbedRequest request)
         {
             if (request.HostImage == null || request.HiddenImage == null)
-                return BadRequest("Both images are required.");
+                return BadRequest(new { error = "Both images are required." });
 
             using var host = request.HostImage.OpenReadStream();
             using var hidden = request.HiddenImage.OpenReadStream();
@@ -111,7 +111,7 @@ namespace kryptografia.Controllers
             long beforeMemory = GC.GetTotalMemory(false);
 
             if (request.HiddenImage.Length > request.HostImage.Length)
-                return BadRequest("Hidden image must not be larger than host image.");
+                return BadRequest(new {error="Hidden image must not be larger than host image." });
 
             try
             {
@@ -137,7 +137,7 @@ namespace kryptografia.Controllers
         public async Task<IActionResult> ExtractImage([FromForm] SteganographyImageExtractRequest request)
         {
             if (request.Image == null)
-                return BadRequest("Image is required.");
+                return BadRequest(new { error = "Image is required." });
 
             var stopwatch = Stopwatch.StartNew();
             long beforeMemory = GC.GetTotalMemory(false);
